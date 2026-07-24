@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"sld/internal"
 	"sld/internal/balancer"
 	"sld/internal/config"
 	"sld/internal/proxy"
@@ -41,10 +42,11 @@ func main() {
 	}
 
 	transport := proxy.NewTransport(cfg.Transport)
+	upstreams := internal.BuildUpstreams(cfg.Upstreams, transport)
 
 	var balancerStrategy balancer.Balancer
 	if cfg.Balancer.Strategy == string(config.RoundRobin) {
-		balancerStrategy = balancer.NewRoundRobinBalancer(cfg.Upstreams, transport)
+		balancerStrategy = balancer.NewRoundRobinBalancer(upstreams, transport)
 	}
 
 	if balancerStrategy == nil {

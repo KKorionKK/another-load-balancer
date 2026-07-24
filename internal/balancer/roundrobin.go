@@ -2,8 +2,6 @@ package balancer
 
 import (
 	"net/http"
-	"net/url"
-	"sld/internal/config"
 	"sync/atomic"
 )
 
@@ -12,13 +10,7 @@ type RoundRobinBalancer struct {
 	index     atomic.Uint32
 }
 
-func NewRoundRobinBalancer(cfgUpstreams []config.UpstreamConfig, transport http.RoundTripper) *RoundRobinBalancer {
-	upstreams := make([]*Upstream, 0, len(cfgUpstreams))
-	for _, upstream := range cfgUpstreams {
-		url, _ := url.Parse(upstream.URL)
-
-		upstreams = append(upstreams, NewUpstream(upstream.Name, url, upstream.Weight, transport))
-	}
+func NewRoundRobinBalancer(upstreams []*Upstream, transport http.RoundTripper) *RoundRobinBalancer {
 	return &RoundRobinBalancer{
 		upstreams: upstreams,
 	}
