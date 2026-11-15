@@ -1,35 +1,36 @@
 package balancer
 
 import (
-	"net/http"
 	"sync/atomic"
 )
 
 type RoundRobinBalancer struct {
+	// upstreams is the list of upstream servers
 	upstreams []*Upstream
-	index     atomic.Uint32
+	// index is the current index of the round-robin balancer
+	index atomic.Uint32
 }
 
-func NewRoundRobinBalancer(upstreams []*Upstream, transport http.RoundTripper) *RoundRobinBalancer {
+func NewRoundRobinBalancer(upstreams []*Upstream) *RoundRobinBalancer {
 	return &RoundRobinBalancer{
 		upstreams: upstreams,
 	}
 }
 
 // Next() Implements logic of round-robin balancing
+//
+// If next upstream is not ready, skips it and tries the next one.
+// If no upstream is ready, returns nil.
 func (r *RoundRobinBalancer) Next() *Upstream {
-	indx := r.index.Add(1)
-	return r.upstreams[indx%uint32(len(r.upstreams))]
-}
-
-// ServeHTTP dispatches the request to the next upstream
-func (rrb *RoundRobinBalancer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	upstream := rrb.Next()
-	if upstream == nil {
-		http.Error(w, "no healthy upstreams", http.StatusServiceUnavailable)
-		return
+	if len(r.upstreams) == 0 {
+		return nil
 	}
-	upstream.ActiveConns.Add(1)
-	defer upstream.ActiveConns.Add(-1)
-	upstream.Proxy.ServeHTTP(w, r)
+	for i := 0; i < len(r.upstreams); i++ {
+		idx := int(r.index.Add(1)-1) % len(r.upstreams)
+		upstream := r.upstreams[idx]
+		if upstream.AllowRequest() {
+			return upstream
+		}
+	}
+	return nil
 }
