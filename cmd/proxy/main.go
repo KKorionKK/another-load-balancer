@@ -1,36 +1,22 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"net/http"
+	"os/signal"
 	"sld/internal"
 	"sld/internal/balancer"
 	"sld/internal/config"
 	"sld/internal/proxy"
+	"syscall"
 )
 
-// func proxyHandler(w http.ResponseWriter, r *http.Request) {
-// 	upstream := "http://localhost:9090"
-// 	url, err := url.Parse(upstream)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	proxy := httputil.ReverseProxy{
-// 		Rewrite: func(pr *httputil.ProxyRequest) {
-// 			pr.SetURL(url)
-// 			pr.Out.Host = pr.In.Host
-// 			pr.SetXForwarded()
-// 		},
-// 	}
-// 	proxy.ServeHTTP(w, r)
-// }
-
-// func main() {
-// 	http.HandleFunc("/", proxyHandler)
-// 	http.ListenAndServe(":8080", nil)
-// }
-
 func main() {
+	ctx, done := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer done()
+
 	cfg, err := config.ParseConfig()
 	if err != nil {
 		log.Fatalln("failed to load config: " + err.Error())
@@ -53,6 +39,19 @@ func main() {
 		log.Fatalln("unsupported balancer strategy: " + cfg.Balancer.Strategy)
 	}
 
-	log.Println("starting proxy with balancer strategy: " + cfg.Balancer.Strategy)
-	http.ListenAndServe(":8080", balancerStrategy)
+	server := http.Server{
+		Addr:    fmt.Sprintf(":%s", cfg.Server.ListenAddr),
+		Handler: balancerStrategy,
+	}
+
+	go func() {
+		<-ctx.Done()
+		log.Println("graceful shutdown")
+		server.Shutdown(ctx)
+	}()
+
+	log.Printf("starting proxy with balancer strategy %s and addr %s", cfg.Balancer.Strategy, server.Addr)
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("listendAndServer: %v", err)
+	}
 }

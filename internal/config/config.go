@@ -87,6 +87,10 @@ func (cfg *Config) ApplyDefaults() {
 		}
 	}
 
+	if cfg.Server.ListenAddr == "" {
+		cfg.Server.ListenAddr = "8080"
+	}
+
 }
 
 // ValidateConfig validates the configuration.
